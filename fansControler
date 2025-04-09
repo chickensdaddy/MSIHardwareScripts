@@ -1,0 +1,53 @@
+#!/bin/bash
+# MSI Fan Controller for register 152
+
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then
+  echo "Please run as root (use sudo)"
+  exit 1
+fi
+
+# Ensure EC module is loaded with write support
+sudo modprobe ec_sys write_support=1 2>/dev/null
+
+# Ensure debugfs is mounted
+if ! mountpoint -q /sys/kernel/debug; then
+  sudo mount -t debugfs none /sys/kernel/debug 2>/dev/null
+fi
+
+# Define fan control register
+FAN_REG=152
+
+# Function to set fan speed
+set_fan_speed() {
+  local speed_hex=$1
+  printf "\\x${speed_hex}" | sudo dd of=/sys/kernel/debug/ec/ec0/io bs=1 seek=$FAN_REG count=1 conv=notrunc 2>/dev/null
+  echo "Fan speed set to $2"
+}
+
+# Control fan based on argument
+case "$1" in
+  max)
+    set_fan_speed "ff" "maximum"
+    ;;
+  high)
+    set_fan_speed "b0" "high"
+    ;;
+  medium)
+    set_fan_speed "80" "medium"
+    ;;
+  low)
+    set_fan_speed "40" "low"
+    ;;
+  auto)
+    set_fan_speed "00" "automatic/off"
+    ;;
+  *)
+    echo "MSI Fan Controller"
+    echo "Usage: sudo ./msi-fan.sh [max|high|medium|low|auto]"
+    ;;
+esac
+
+# Show temperatures
+echo "Current temperatures:"
+sensors | grep -E "Core|fan|temp"
